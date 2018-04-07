@@ -130,6 +130,7 @@ PYBIND11_MODULE(rigid_body_tree, m) {
          py::arg("model_instance_id_set") =
            RigidBodyTreeConstants::default_model_instance_id_set,
          py::arg("in_terms_of_qdot") = false)
+    .def("get_num_model_instances", &RigidBodyTree<double>::get_num_model_instances)
     .def("get_num_bodies", &RigidBodyTree<double>::get_num_bodies)
     .def("get_num_frames", &RigidBodyTree<double>::get_num_frames)
     .def("get_num_actuators", &RigidBodyTree<double>::get_num_actuators)
@@ -143,6 +144,27 @@ PYBIND11_MODULE(rigid_body_tree, m) {
     .def("get_body", &RigidBodyTree<double>::get_body,
          py::return_value_policy::reference)
     .def("get_position_name", &RigidBodyTree<double>::get_position_name)
+    .def("collisionDetect", [](RigidBodyTree<double>& tree,
+                               const KinematicsCache<double>& cache,
+                               const std::vector<int>& bodies_idx,
+                               bool use_margins) {
+      Eigen::VectorXd phi;
+      Eigen::Matrix3Xd normal, xA, xB;
+      std::vector<int> bodyA_idx, bodyB_idx;
+      tree.collisionDetect(cache, 
+        phi, normal, xA, xB, bodyA_idx, bodyB_idx, 
+        bodies_idx, use_margins);
+      return std::make_tuple(phi, normal, xA, xB, bodyA_idx, bodyB_idx);
+    })
+    .def("allCollisions", [](RigidBodyTree<double>& tree,
+                               const KinematicsCache<double>& cache,
+                               bool use_margins) {
+      Eigen::Matrix3Xd xA, xB;
+      std::vector<int> bodyA_idx, bodyB_idx;
+      tree.allCollisions(cache, 
+          bodyA_idx, bodyB_idx, xA, xB, use_margins);
+      return std::make_tuple(xA, xB, bodyA_idx, bodyB_idx);
+     })
     .def("transformPoints", [](const RigidBodyTree<double>& tree,
                                const KinematicsCache<double>& cache,
                                const Eigen::Matrix<double, 3,
@@ -176,6 +198,8 @@ PYBIND11_MODULE(rigid_body_tree, m) {
         body_or_frame_ind).matrix();
     })
     .def("addFrame", &RigidBodyTree<double>::addFrame)
+    .def("FindModelInstanceBodies", &RigidBodyTree<double>::FindModelInstanceBodies)
+    .def("FindBaseBodies", &RigidBodyTree<double>::FindBaseBodies, py::arg("model_id") = -1)
     .def("FindBody", [](const RigidBodyTree<double>& self,
                         const std::string& body_name,
                         const std::string& model_name = "",
@@ -189,8 +213,13 @@ PYBIND11_MODULE(rigid_body_tree, m) {
          static_cast<RigidBody<double>& (RigidBodyTree<double>::*)()>(
              &RigidBodyTree<double>::world),
          py::return_value_policy::reference)
+    .def("FindBodyIndex", &RigidBodyTree<double>::FindBodyIndex,
+         py::arg("body_name"), py::arg("model_instance_id") = -1)
+    .def("findJointId", &RigidBodyTree<double>::FindIndexOfChildBodyOfJoint, // findJointId
+         py::arg("joint_name"), py::arg("model_id") = -1)
     .def("findFrame", &RigidBodyTree<double>::findFrame,
          py::arg("frame_name"), py::arg("model_id") = -1)
+    .def("FindCollisionElement", &RigidBodyTree<double>::FindCollisionElement)
     .def("getTerrainContactPoints",
          [](const RigidBodyTree<double>& self,
             const RigidBody<double>& body,
@@ -216,14 +245,47 @@ PYBIND11_MODULE(rigid_body_tree, m) {
     .def_readonly("joint_limit_min", &RigidBodyTree<double>::joint_limit_min)
     .def_readonly("joint_limit_max", &RigidBodyTree<double>::joint_limit_max);
 
-  py::class_<KinematicsCache<double> >(m, "KinematicsCacheDouble");
+  py::class_<KinematicsCache<double> >(m, "KinematicsCacheDouble")
+    .def("getQ", &KinematicsCache<double>::getQ)
+    .def("getV", &KinematicsCache<double>::getV)
+    .def("getX", &KinematicsCache<double>::getX);
   py::class_<KinematicsCache<AutoDiffXd> >(m, "KinematicsCacheAutoDiffXd");
 
   py::class_<RigidBody<double> >(m, "RigidBody")
     .def("get_name", &RigidBody<double>::get_name)
+    .def("get_model_name", &RigidBody<double>::get_model_name)
+    .def("get_model_instance_id", &RigidBody<double>::get_model_instance_id)
+    .def("has_joint", &RigidBody<double>::has_joint)
+    .def("has_parent_body", &RigidBody<double>::has_parent_body)
+    .def("get_parent", &RigidBody<double>::get_parent)
     .def("get_body_index", &RigidBody<double>::get_body_index)
     .def("get_center_of_mass", &RigidBody<double>::get_center_of_mass)
-    .def("get_visual_elements", &RigidBody<double>::get_visual_elements);
+    .def("get_visual_elements", &RigidBody<double>::get_visual_elements)
+    .def("IsRigidlyFixedToWorld", &RigidBody<double>::IsRigidlyFixedToWorld)
+    .def("adjacentTo", &RigidBody<double>::adjacentTo)
+    .def("CanCollideWith", &RigidBody<double>::CanCollideWith)
+    .def("get_collision_element_ids", &RigidBody<double>::get_collision_element_ids)
+    .def("get_group_to_collision_ids_map", &RigidBody<double>::get_group_to_collision_ids_map)
+    .def("get_position_start_index", &RigidBody<double>::get_position_start_index)
+    .def("get_velocity_start_index", &RigidBody<double>::get_velocity_start_index)
+    //.def("get_joint_name", [](const RigidBody<double>& body) {
+    //    if (!body.has_joint()) {
+    //      return std::string();
+    //    }
+    //    return body.getJoint().get_name();
+    //  })
+    .def("get_num_positions", [](const RigidBody<double>& body) {
+        if (!body.has_joint()) {
+          return 0;
+        }
+        return body.getJoint().get_num_positions();
+      })
+    .def("get_num_velocities", [](const RigidBody<double>& body) {
+        if (!body.has_joint()) {
+          return 0;
+        }
+        return body.getJoint().get_num_velocities();
+      }); // TODO: name, floating, fixed
 
   py::class_<RigidBodyFrame<double>,
              shared_ptr<RigidBodyFrame<double> > >(m, "RigidBodyFrame")
@@ -244,6 +306,8 @@ PYBIND11_MODULE(rigid_body_tree, m) {
         py::arg("name"), py::arg("body"),
         py::arg("transform_to_body"))
     .def("get_name", &RigidBodyFrame<double>::get_name)
+    .def("get_rigid_body", &RigidBodyFrame<double>::get_rigid_body)
+    .def("get_model_instance_id", &RigidBodyFrame<double>::get_model_instance_id)
     .def("get_frame_index", &RigidBodyFrame<double>::get_frame_index);
 
   m.def("AddModelInstanceFromUrdfStringSearchingInRosPackages",
