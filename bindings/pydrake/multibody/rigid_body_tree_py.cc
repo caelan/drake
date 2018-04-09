@@ -157,14 +157,14 @@ PYBIND11_MODULE(rigid_body_tree, m) {
       return std::make_tuple(phi, normal, xA, xB, bodyA_idx, bodyB_idx);
     })
     .def("allCollisions", [](RigidBodyTree<double>& tree,
-                               const KinematicsCache<double>& cache,
-                               bool use_margins) {
+                             const KinematicsCache<double>& cache,
+                             bool use_margins) {
       Eigen::Matrix3Xd xA, xB;
       std::vector<int> bodyA_idx, bodyB_idx;
       tree.allCollisions(cache, 
           bodyA_idx, bodyB_idx, xA, xB, use_margins);
       return std::make_tuple(xA, xB, bodyA_idx, bodyB_idx);
-     })
+    })
     .def("transformPoints", [](const RigidBodyTree<double>& tree,
                                const KinematicsCache<double>& cache,
                                const Eigen::Matrix<double, 3,
@@ -215,7 +215,7 @@ PYBIND11_MODULE(rigid_body_tree, m) {
          py::return_value_policy::reference)
     .def("FindBodyIndex", &RigidBodyTree<double>::FindBodyIndex,
          py::arg("body_name"), py::arg("model_instance_id") = -1)
-    .def("findJointId", &RigidBodyTree<double>::FindIndexOfChildBodyOfJoint, // findJointId
+    .def("FindIndexOfChildBodyOfJoint", &RigidBodyTree<double>::FindIndexOfChildBodyOfJoint,
          py::arg("joint_name"), py::arg("model_id") = -1)
     .def("findFrame", &RigidBodyTree<double>::findFrame,
          py::arg("frame_name"), py::arg("model_id") = -1)
@@ -268,24 +268,18 @@ PYBIND11_MODULE(rigid_body_tree, m) {
     .def("get_group_to_collision_ids_map", &RigidBody<double>::get_group_to_collision_ids_map)
     .def("get_position_start_index", &RigidBody<double>::get_position_start_index)
     .def("get_velocity_start_index", &RigidBody<double>::get_velocity_start_index)
-    //.def("get_joint_name", [](const RigidBody<double>& body) {
-    //    if (!body.has_joint()) {
-    //      return std::string();
-    //    }
-    //    return body.getJoint().get_name();
-    //  })
     .def("get_num_positions", [](const RigidBody<double>& body) {
         if (!body.has_joint()) {
           return 0;
         }
         return body.getJoint().get_num_positions();
-      })
+    })
     .def("get_num_velocities", [](const RigidBody<double>& body) {
         if (!body.has_joint()) {
           return 0;
         }
         return body.getJoint().get_num_velocities();
-      }); // TODO: name, floating, fixed
+    });
 
   py::class_<RigidBodyFrame<double>,
              shared_ptr<RigidBodyFrame<double> > >(m, "RigidBodyFrame")
